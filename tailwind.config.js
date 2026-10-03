@@ -72,6 +72,8 @@ module.exports = {
         "sm": "8px"
       },
       "fontFamily": {
+        "display": ["Geist", "Inter", "system-ui", "sans-serif"],
+        "body": ["Inter", "system-ui", "sans-serif"],
         "display-lg": [
           "Geist"
         ],
