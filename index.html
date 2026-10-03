@@ -413,9 +413,17 @@ PRUV. Verifiable allocation on Solana. No operator. No trust. No argument. Donâ€
                     For early network operators, integrators, and ecosystem partners interested in verifiable allocation infrastructure.
                 </p>
 </div>
-<form action="https://formsubmit.co/nidakmky@gmail.com" method="POST" class="w-full grid grid-cols-1 md:grid-cols-2 gap-md">
+<!--
+  FormSubmit setup (owner action required):
+  The form action below uses FormSubmit's alias endpoint so the inbox address is not exposed in public HTML.
+  Replace REPLACE_WITH_FORMSUBMIT_ALIAS with the "random-like string" alias FormSubmit sends in the
+  activation email after the first submission from this domain (format: https://formsubmit.co/el/<alias>).
+  Until it is replaced, submissions will not be delivered.
+-->
+<form action="https://formsubmit.co/el/REPLACE_WITH_FORMSUBMIT_ALIAS" method="POST" class="w-full grid grid-cols-1 md:grid-cols-2 gap-md">
 <input type="hidden" name="_subject" value="New PRUV Waitlist Submission"/>
-<input type="hidden" name="_captcha" value="false"/>
+<input type="hidden" name="_next" value="https://www.pruv.fun/#waitlist"/>
+<input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off"/>
 <div class="md:col-span-2">
 <label class="block font-mono text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant mb-sm" for="waitlist-name">Name</label>
 <input class="w-full px-md py-3 rounded-sm bg-black/40 border border-white/10 text-on-surface font-body text-sm placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/40 transition-colors" id="waitlist-name" type="text" name="name" placeholder="Ada Lovelace" required autocomplete="name"/>
