@@ -121,7 +121,7 @@
 <span class="font-mono text-[10px] text-primary tracking-[0.2em] uppercase font-bold">Decentralized Allocation Protocol</span>
 </div>
 <h1 class="font-display text-5xl md:text-[88px] max-w-5xl text-white mb-lg leading-[1.05] tracking-tight font-bold text-gradient">
-            Deterministic allocation,<br/>zero operator trust.
+            Deterministic allocation.<br/>The operator cannot choose the outcome.
         </h1>
 <p class="font-body text-lg md:text-xl text-on-surface-variant max-w-2xl mb-xl">
             PRUV turns resource allocation into a deterministic, verifiable network. Rules, commitments, and cryptographic verification define the outcome — not operators.
@@ -317,7 +317,7 @@ Let’s run a live round: 100 wallets, 10 winners, no operator.
 
 Each participant commits a secret before the allocation seed is known. After the window closes, the list and the outcome cannot be changed by anyone — not even us.
 
-Allocation complete. Commitments are valid. Ordering is canonical. The seed is derived deterministically. Winners are recomputable. The proof is verified. And here is the on-chain receipt: the seed is anchored to Solana devnet.
+Allocation complete. Commitments are valid. Ordering is canonical. The seed is derived deterministically. Winners are recomputable. The proof is generated and verified off-chain. And here is the on-chain receipt: the seed is anchored to Solana devnet.
 
 Now let’s run the full commit-reveal round with a connected wallet: eight participants, three winners, using a real devnet slot.
 
@@ -329,7 +329,7 @@ The transaction is finalized on Solana devnet. The memo carries the allocation s
 
 And here is the cryptographic trace: SHA-256 commitments, secret generation, nullifiers, Merkle inclusion, eligibility checks, and proof verification. This is what verifiable allocation looks like.
 
-PRUV. Verifiable allocation on Solana. No operator. No trust. No argument. Don’t trust. Verify.
+PRUV. Verifiable allocation on Solana. No operator picks the outcome. No hidden list. Don’t trust. Verify.
 -->
 </section>
 <!-- 5. Team Section -->
@@ -499,25 +499,25 @@ PRUV. Verifiable allocation on Solana. No operator. No trust. No argument. Don�
 <td class="p-lg font-medium text-white">Trust Assumption</td>
 <td class="p-lg text-on-surface-variant">Centralized Operator</td>
 <td class="p-lg text-on-surface-variant">Hybrid Node Trust</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Cryptographic Verification</td>
+<td class="p-lg text-primary font-bold bg-primary/5">Recompute it yourself</td>
 </tr>
 <tr class="border-b border-white/5">
 <td class="p-lg font-medium text-white">Execution Proofs</td>
 <td class="p-lg text-on-surface-variant">None (Internal)</td>
 <td class="p-lg text-on-surface-variant">Seed Only</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Full Logic Trace</td>
+<td class="p-lg text-primary font-bold bg-primary/5">On-chain re-derivation + off-chain ZK trace</td>
 </tr>
 <tr class="border-b border-white/5">
 <td class="p-lg font-medium text-white">Consensus Layer</td>
 <td class="p-lg text-on-surface-variant">Database Locked</td>
 <td class="p-lg text-on-surface-variant">Smart Contract</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Node Coordination Layer</td>
+<td class="p-lg text-primary font-bold bg-primary/5">Solana program + staked nodes (liveness only)</td>
 </tr>
 <tr>
 <td class="p-lg font-medium text-white">Verification Cost</td>
 <td class="p-lg text-on-surface-variant">Manual Audit</td>
 <td class="p-lg text-on-surface-variant">High / Gas Intensive</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Low-Cost Verification</td>
+<td class="p-lg text-primary font-bold bg-primary/5">One command, your own RPC</td>
 </tr>
 </tbody>
 </table>
