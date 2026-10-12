@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "PRUV landing page (static). Tailwind is precompiled to tailwind.css; run `npm run build` after editing index.html.",
   "scripts": {
-    "build": "tailwindcss -i src/input.css -o tailwind.css --minify",
+    "build": "tailwindcss -i src/input.css -o tailwind.css --minify && rm -rf public && mkdir public && cp index.html tailwind.css hero-network.png pruv-butterfly.png og.png public/",
     "watch": "tailwindcss -i src/input.css -o tailwind.css --watch"
   },
   "devDependencies": {
