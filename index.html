@@ -1,549 +1,670 @@
-<!DOCTYPE html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PRUV — Verifiable allocation layer on Solana</title>
+<meta name="description" content="PRUV commits entries before the seed exists, lets staked nodes attest the draw, and re-derives the winner on-chain. Anyone can recompute it with their own RPC. Live on Solana devnet.">
+<link rel="icon" href="pruv-butterfly.png">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.pruv.fun/">
+<meta property="og:title" content="PRUV — Verifiable allocation layer on Solana">
+<meta property="og:description" content="The operator cannot choose the outcome. Anyone can recompute it. Live on Solana devnet.">
+<meta property="og:image" content="https://www.pruv.fun/og.png">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PRUV — Verifiable allocation layer on Solana">
+<meta name="twitter:description" content="The operator cannot choose the outcome. Anyone can recompute it. Live on Solana devnet.">
+<meta name="twitter:image" content="https://www.pruv.fun/og.png">
 
-<html class="dark" lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>PRUV | Verifiable Allocation Protocol</title>
-<meta name="description" content="PRUV turns resource allocation into a deterministic, verifiable network: committed inputs, canonical ordering, deterministic seed, fixed rules, independently verifiable output, Solana receipt."/>
-<link rel="canonical" href="https://www.pruv.fun/"/>
-<link rel="icon" href="/pruv-butterfly.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/pruv-butterfly.png"/>
-<meta property="og:title" content="PRUV | Verifiable Allocation Protocol"/>
-<meta property="og:description" content="PRUV turns resource allocation into a deterministic, verifiable network: committed inputs, canonical ordering, deterministic seed, fixed rules, independently verifiable output, Solana receipt."/>
-<meta property="og:type" content="website"/>
-<meta property="og:url" content="https://www.pruv.fun/"/>
-<meta property="og:image" content="https://www.pruv.fun/og.png"/>
-<meta property="og:image:width" content="1200"/>
-<meta property="og:image:height" content="630"/>
-<meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:site" content="@pruvfun"/>
-<meta name="twitter:title" content="PRUV | Verifiable Allocation Protocol"/>
-<meta name="twitter:description" content="PRUV turns resource allocation into a deterministic, verifiable network: committed inputs, canonical ordering, deterministic seed, fixed rules, independently verifiable output, Solana receipt."/>
-<meta name="twitter:image" content="https://www.pruv.fun/og.png"/>
-<link rel="stylesheet" href="tailwind.css"/>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Inter:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind (Play CDN), pinned. Utilities for layout; tokens + fine detail in the style block below. -->
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: 'var(--bg)', surface: 'var(--surface)', surface2: 'var(--surface-2)',
+          fg: 'var(--fg)', dim: 'var(--fg-dim)', muted: 'var(--muted)',
+          primary: 'var(--primary)', secondary: 'var(--secondary)', ok: 'var(--ok)',
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        },
+        maxWidth: { content: '1200px' },
+      },
+    },
+  };
+</script>
+
 <style>
-        @font-face {
-            font-family: 'Geist';
-            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.3/dist/fonts/geist-sans/Geist-Medium.woff2') format('woff2');
-            font-weight: 500;
-        }
-        @font-face {
-            font-family: 'Geist';
-            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.3/dist/fonts/geist-sans/Geist-SemiBold.woff2') format('woff2');
-            font-weight: 600;
-        }
-        @font-face {
-            font-family: 'Geist';
-            src: url('https://cdn.jsdelivr.net/npm/geist@1.0.3/dist/fonts/geist-sans/Geist-Bold.woff2') format('woff2');
-            font-weight: 700;
-        }
+  /* Layout: single dark surface, 1200px column, hairline rules; alternating bg/surface sections; grid texture in the hero only. */
+  :root {
+    --bg: #0b0d12;
+    --surface: #12151c;
+    --surface-2: #171b24;
+    --fg: #e8ebf2;
+    --fg-dim: #b2bacb;
+    --muted: #868fa6;
+    --primary: #b8c3ff;
+    --secondary: #d3fbff;
+    --ok: #46dd8a;
+    --line: rgba(255, 255, 255, 0.07);
+    --line-strong: rgba(255, 255, 255, 0.12);
+    color-scheme: dark;
+  }
 
-        html {
-            scroll-behavior: smooth;
-        }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
-        body {
-            background-color: #0c0e17;
-            background-image: 
-                linear-gradient(rgba(67, 70, 86, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(67, 70, 86, 0.02) 1px, transparent 1px);
-            background-size: 60px 60px;
-            color: #e2e1ef;
-            font-family: 'Inter', sans-serif;
-            letter-spacing: -0.01em;
-        }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased; letter-spacing: -0.01em;
+  }
 
-        .glass {
-            background: rgba(25, 27, 36, 0.2);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(142, 144, 162, 0.08);
-        }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-size: 11px; font-weight: 500; color: var(--muted);
+  }
+  .sindex {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    letter-spacing: 0.16em; color: var(--muted); margin-bottom: 20px;
+  }
+  .sindex b { color: var(--primary); font-weight: 600; }
 
-        .glass-hover:hover {
-            border-color: rgba(184, 195, 255, 0.15);
-            background: rgba(25, 27, 36, 0.3);
-        }
+  .hairline-t { border-top: 1px solid var(--line); }
+  .hairline-b { border-bottom: 1px solid var(--line); }
 
-        .text-gradient {
-            background: linear-gradient(180deg, #ffffff 0%, #a5a7bc 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+  section[id] { scroll-margin-top: 84px; }
 
-        .radial-glow-main {
-            background: radial-gradient(circle at 50% -20%, rgba(45, 91, 255, 0.08) 0%, transparent 60%);
-        }
+  a { text-decoration: none; }
+  .link { color: var(--primary); transition: color .15s ease; }
+  .link:hover { color: var(--secondary); }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 
-        .section-spacing {
-            padding-top: 160px;
-            padding-bottom: 160px;
-        }
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, var(--line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+    background-size: 48px 48px; background-position: center top;
+    -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 28%, #000 38%, transparent 100%);
+    mask-image: radial-gradient(ellipse 85% 70% at 50% 28%, #000 38%, transparent 100%);
+  }
 
-        @media (max-width: 768px) {
-            .section-spacing {
-                padding-top: 80px;
-                padding-bottom: 80px;
-            }
-        }
-    </style>
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 14px; line-height: 1;
+    padding: 12px 18px; border-radius: 8px; min-height: 44px; box-sizing: border-box;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: #0b0d12; }
+  .btn-primary:hover { background: #cdd5ff; }
+  .btn-ghost { background: transparent; color: var(--fg); border: 1px solid var(--line-strong); }
+  .btn-ghost:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-sm { padding: 9px 14px; min-height: 40px; font-size: 13px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+  /* Terminal */
+  .term { background: #0a0c11; border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; }
+  .term-head { border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .term-body { padding: 18px; overflow-x: auto; }
+  .term-body pre { margin: 0; font-size: 12.5px; line-height: 1.95; white-space: pre; }
+  .tline { opacity: 1; transform: none; transition: opacity .22s ease, transform .22s ease; }
+  .term.anim .tline { opacity: 0; transform: translateY(3px); }
+  .term.anim .tline.show { opacity: 1; transform: none; }
+  .t-prompt { color: var(--primary); }
+  .t-cmd { color: var(--fg); }
+  .t-check { color: var(--ok); }
+  .t-out { color: var(--muted); }
+  .t-ok { color: var(--ok); font-weight: 700; letter-spacing: 0.04em; }
+
+  /* Code */
+  .code { background: #0a0c11; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .code pre { margin: 0; padding: 18px; overflow-x: auto; font-size: 13px; line-height: 1.8; color: var(--fg); }
+  .tok-kw { color: var(--primary); }
+  .tok-str { color: var(--secondary); }
+  .tok-com { color: var(--muted); font-style: italic; }
+  .tok-dim { color: var(--fg-dim); }
+
+  .copy {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--surface-2);
+    color: var(--muted); cursor: pointer; transition: color .15s, border-color .15s; flex: none;
+  }
+  .copy:hover { color: var(--fg); border-color: var(--line-strong); }
+  .copy.copied { color: var(--ok); border-color: var(--ok); }
+
+  /* Architecture flow */
+  .flow-row { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  .node {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; min-width: 0; text-align: center;
+  }
+  .node .n-title { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--fg); font-weight: 500; }
+  .node .n-sub { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .node.accent { border-color: rgba(184,195,255,0.35); }
+  .flow-arrow { color: var(--muted); align-self: center; transform: rotate(90deg); flex: none; }
+  @media (min-width: 1024px) {
+    .flow-row { flex-direction: row; align-items: center; gap: 8px; }
+    .node { flex: 1 1 0; }
+    .flow-arrow { transform: none; }
+  }
+
+  /* Guarantee cards */
+  .gcard {
+    display: flex; flex-direction: column; background: var(--surface);
+    padding: 26px; transition: border-color .15s ease, transform .15s ease, background .15s ease;
+    border: 1px solid transparent;
+  }
+  .gcard:hover { border-color: var(--primary); transform: translateY(-3px); background: var(--surface-2); }
+  .gcard .gicon { color: var(--primary); margin-bottom: 18px; }
+
+  /* Explorer table */
+  .exp-row { display: grid; grid-template-columns: 180px 1fr auto auto; align-items: center; gap: 14px; padding: 14px 16px; }
+  .exp-row + .exp-row { border-top: 1px solid var(--line); }
+  .addr { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  @media (max-width: 720px) {
+    .exp-row { grid-template-columns: 1fr auto auto; grid-template-areas: "name name name" "addr copy exp"; row-gap: 8px; }
+    .exp-name { grid-area: name; } .exp-addr { grid-area: addr; } .exp-copy { grid-area: copy; } .exp-exp { grid-area: exp; }
+  }
+
+  /* Evidence cards */
+  .ev { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; transition: border-color .15s ease, transform .15s ease; }
+  .ev:hover { border-color: var(--primary); transform: translateY(-2px); }
+
+  /* Mobile menu */
+  #mobileMenu { border-bottom: 1px solid var(--line); }
+  .monogram {
+    width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--primary); flex: none;
+  }
+</style>
+
 </head>
-<body class="overflow-x-hidden selection:bg-primary/30">
-<!-- Navigation -->
-<nav class="fixed top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-white/5">
-<div class="flex justify-between items-center w-full px-lg md:px-xl py-md max-w-container-max mx-auto">
-<div class="flex items-center gap-2.5 shrink-0">
-<img src="pruv-butterfly.png" alt="" decoding="async" class="h-7 w-auto object-contain pointer-events-none mix-blend-screen" aria-hidden="true"/>
-<span class="font-display text-2xl font-bold tracking-tighter text-white">PRUV</span>
-</div>
-<div class="hidden md:flex items-center gap-lg">
-<a class="text-white font-medium text-sm hover:opacity-70 transition-opacity" href="#hero">Network</a>
-<a class="text-on-surface-variant font-medium text-sm hover:text-white transition-colors" href="#how-it-works">How It Works</a>
-<a class="text-on-surface-variant font-medium text-sm hover:text-white transition-colors" href="#proof-in-motion">Proof</a>
-<a class="text-on-surface-variant font-medium text-sm hover:text-white transition-colors" href="#team">Team</a>
-<a class="text-on-surface-variant font-medium text-sm hover:text-white transition-colors" href="#waitlist">Contact</a>
-</div>
-<div class="flex items-center gap-md">
-<a class="text-on-surface-variant hover:text-white transition-colors flex items-center" href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer">
-<svg aria-hidden="true" class="w-4 h-4 fill-current" viewbox="0 0 24 24">
-<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"></path>
-</svg>
-</a>
-<a class="bg-white text-background px-md py-2 rounded-sm font-semibold text-sm hover:bg-primary transition-colors inline-block" href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer">
-                    GitHub
-                </a>
-</div>
-</div>
-</nav>
-<!-- 1. Hero Section -->
-<header class="relative pt-[180px] pb-xl flex flex-col items-center justify-center min-h-screen text-center px-md overflow-hidden radial-glow-main" id="hero">
-<div class="mb-lg inline-flex items-center px-md py-1.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm">
-<span class="font-mono text-[10px] text-primary tracking-[0.2em] uppercase font-bold">Verifiable Allocation Protocol</span>
-</div>
-<h1 class="font-display text-5xl md:text-[88px] max-w-5xl text-white mb-lg leading-[1.05] tracking-tight font-bold text-gradient">
-            Deterministic allocation.<br/>The operator cannot choose the outcome.
-        </h1>
-<p class="font-body text-lg md:text-xl text-on-surface-variant max-w-2xl mb-xl">
-            PRUV turns resource allocation into a deterministic, verifiable network. Rules, commitments, and cryptographic verification define the outcome — not operators.
-        </p>
-<div class="flex flex-col sm:flex-row gap-md justify-center mb-xxl">
-<a class="bg-primary text-on-primary px-xl py-4 rounded-sm font-bold transition-all hover:brightness-110 shadow-[0_0_40px_rgba(184,195,255,0.15)] inline-block" href="https://pruvpot.vercel.app" target="_blank" rel="noopener noreferrer">
-                Try PRUVPOT (devnet)
-            </a>
-<a class="border border-white/20 text-white px-xl py-4 rounded-sm font-bold transition-all hover:bg-white/5 inline-block" href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer">
-                View GitHub
-            </a>
-<a class="border border-white/20 text-white px-xl py-4 rounded-sm font-bold transition-all hover:bg-white/5 inline-block" href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer">
-                Follow on X
-            </a>
-</div>
-<!-- Hero Technical Graphic -->
-<div class="w-full max-w-container-max aspect-[21/9] rounded-lg border border-white/5 relative overflow-hidden bg-surface-container/30 group">
-<img alt="Network" class="w-full h-full object-cover opacity-40 grayscale contrast-125 transition-transform duration-[30s] group-hover:scale-105" src="hero-network.png"/>
-<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent"></div>
-<div class="absolute bottom-md left-md">
-<div class="flex items-center gap-sm px-md py-2 glass rounded-sm">
-<div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-<span class="font-mono text-[11px] text-primary uppercase font-bold tracking-widest">BUILT FOR COLOSSEUM CRYPTO WORLD'S FAIR</span>
-</div>
-</div>
-</div>
+<body>
+
+<!-- ============================== NAV ============================== -->
+<header class="sticky z-40 bg-bg/90 backdrop-blur hairline-b" style="top: env(safe-area-inset-top, 0px);">
+  <nav class="mx-auto max-w-content px-5 h-16 flex items-center justify-between gap-4">
+    <a href="#top" class="flex items-center gap-2.5 shrink-0" aria-label="PRUV home">
+      <img class="brand-mark" src="pruv-butterfly.png" alt="PRUV" width="22" height="22">
+      <span class="mono font-bold tracking-[0.18em] text-[15px] text-fg">PRUV</span>
+    </a>
+
+    <div class="hidden md:flex items-center gap-7 text-sm text-dim">
+      <a href="#protocol" class="hover:text-fg transition-colors">Protocol</a>
+      <a href="#developers" class="hover:text-fg transition-colors">Developers</a>
+      <a href="#verify" class="hover:text-fg transition-colors">Verify</a>
+      <a href="#network" class="hover:text-fg transition-colors">Network</a>
+      <a href="#contact" class="hover:text-fg transition-colors">Contact</a>
+      <a href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer" class="hover:text-fg transition-colors">GitHub</a>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <a href="https://pruvpot.vercel.app" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm shrink-0">Try PRUVPOT <span class="opacity-70 font-normal">(devnet)</span></a>
+      <button type="button" id="menuBtn" class="md:hidden copy" aria-label="Open menu" aria-expanded="false" aria-controls="mobileMenu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <div id="mobileMenu" class="md:hidden bg-bg" hidden>
+    <div class="px-5 py-3 flex flex-col">
+      <a href="#protocol" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>Protocol</a>
+      <a href="#developers" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>Developers</a>
+      <a href="#verify" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>Verify</a>
+      <a href="#network" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>Network</a>
+      <a href="#contact" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>Contact</a>
+      <a href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer" class="py-3 text-dim hover:text-fg transition-colors" data-mclose>GitHub</a>
+    </div>
+  </div>
 </header>
-<!-- 2. Problem / Solution Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg">
-<div class="max-w-3xl mb-xl">
-<h2 class="font-display text-4xl md:text-5xl text-white mb-md font-semibold tracking-tight">The Problem: Allocation Still Runs on Trust</h2>
-<p class="font-body text-lg text-on-surface-variant leading-relaxed">
-                Most allocation systems rely on operators to manage eligibility, ordering, and final selection. That creates room for hidden logic, manual overrides, and unverifiable outcomes.
-            </p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-<!-- The Problem -->
-<div class="p-xl glass border-white/5 rounded-lg flex flex-col justify-between">
-<div>
-<h3 class="font-display text-2xl text-white mb-lg font-semibold flex items-center gap-md">
-<span class="material-symbols-outlined text-error/60">warning</span>
-                        The Problem
-                    </h3>
-<ul class="space-y-md">
-<li class="flex gap-md font-body text-on-surface-variant leading-relaxed">
-<span class="text-error/60">•</span>
-                            Participant sets can be changed or filtered without proof
-                        </li>
-<li class="flex gap-md font-body text-on-surface-variant leading-relaxed">
-<span class="text-error/60">•</span>
-                            Ordering rules are often hidden or operator-controlled
-                        </li>
-<li class="flex gap-md font-body text-on-surface-variant leading-relaxed">
-<span class="text-error/60">•</span>
-                            Randomness does not prove the full allocation path
-                        </li>
-<li class="flex gap-md font-body text-on-surface-variant leading-relaxed">
-<span class="text-error/60">•</span>
-                            Users cannot independently verify why an outcome happened
-                        </li>
-</ul>
-</div>
-</div>
-<!-- The PRUV Solution -->
-<div class="p-xl glass border-primary/20 bg-primary/5 rounded-lg flex flex-col justify-between">
-<div>
-<h3 class="font-display text-2xl text-primary mb-lg font-semibold flex items-center gap-md">
-<span class="material-symbols-outlined">verified</span>
-                        The PRUV Solution
-                    </h3>
-<ul class="space-y-md">
-<li class="flex gap-md font-body text-white leading-relaxed">
-<span class="text-primary">•</span>
-                            Inputs are committed before allocation
-                        </li>
-<li class="flex gap-md font-body text-white leading-relaxed">
-<span class="text-primary">•</span>
-                            Ordering is deterministic and replayable
-                        </li>
-<li class="flex gap-md font-body text-white leading-relaxed">
-<span class="text-primary">•</span>
-                            Selection follows fixed protocol rules
-                        </li>
-<li class="flex gap-md font-body text-white leading-relaxed">
-<span class="text-primary">•</span>
-                            Results can be independently verified
-                        </li>
-</ul>
-</div>
-</div>
-</div>
-<div class="mt-xl text-center">
-<p class="font-mono text-[12px] text-primary uppercase font-bold tracking-widest">
-                PRUV turns allocation from an operator decision into a verifiable computation path.
-            </p>
-</div>
-</section>
-<!-- 3. How PRUV Works Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg" id="how-it-works">
-<div class="text-center mb-xl">
-<h2 class="font-display text-4xl md:text-5xl text-white mb-md font-semibold tracking-tight">How PRUV Works</h2>
-<p class="font-body text-lg text-on-surface-variant max-w-2xl mx-auto">
-                PRUV makes allocation reproducible from committed inputs, deterministic rules, and verifiable outputs.
-            </p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-5 gap-md relative">
-<!-- Connecting Line (Desktop) -->
-<div class="hidden md:block absolute top-1/2 left-0 w-full h-[1px] bg-white/5 -translate-y-1/2 z-0"></div>
-<!-- Step 01 -->
-<div class="relative z-10 p-lg glass border-white/5 rounded-lg bg-surface-container/50">
-<span class="font-mono text-[12px] text-primary font-bold mb-md block">01</span>
-<h3 class="font-display text-lg text-white mb-sm font-semibold">Input Commitments</h3>
-<p class="font-body text-xs text-on-surface-variant leading-relaxed opacity-80">
-                    Participants or applications submit committed allocation inputs.
-                </p>
-</div>
-<!-- Step 02 -->
-<div class="relative z-10 p-lg glass border-white/5 rounded-lg bg-surface-container/50">
-<span class="font-mono text-[12px] text-primary font-bold mb-md block">02</span>
-<h3 class="font-display text-lg text-white mb-sm font-semibold">Canonical Ordering</h3>
-<p class="font-body text-xs text-on-surface-variant leading-relaxed opacity-80">
-                    Valid inputs are ordered deterministically so operators cannot reorder the process.
-                </p>
-</div>
-<!-- Step 03 -->
-<div class="relative z-10 p-lg glass border-white/5 rounded-lg bg-surface-container/50">
-<span class="font-mono text-[12px] text-primary font-bold mb-md block">03</span>
-<h3 class="font-display text-lg text-white mb-sm font-semibold">Rule Binding</h3>
-<p class="font-body text-xs text-on-surface-variant leading-relaxed opacity-80">
-                    Allocation rules, input commitments, and network state are bound into one computation path.
-                </p>
-</div>
-<!-- Step 04 -->
-<div class="relative z-10 p-lg glass border-white/5 rounded-lg bg-surface-container/50">
-<span class="font-mono text-[12px] text-primary font-bold mb-md block">04</span>
-<h3 class="font-display text-lg text-white mb-sm font-semibold">Deterministic Allocation</h3>
-<p class="font-body text-xs text-on-surface-variant leading-relaxed opacity-80">
-                    The result is produced by fixed logic, not by manual selection or operator discretion.
-                </p>
-</div>
-<!-- Step 05 -->
-<div class="relative z-10 p-lg glass border-primary/20 rounded-lg bg-primary/5">
-<span class="font-mono text-[12px] text-primary font-bold mb-md block">05</span>
-<h3 class="font-display text-lg text-white mb-sm font-semibold">Verifiable Output</h3>
-<p class="font-body text-xs text-on-surface-variant leading-relaxed opacity-80">
-                    Anyone can check the final result against the committed inputs and protocol rules.
-                </p>
-</div>
-</div>
-<div class="mt-xl text-center">
-<p class="font-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">
-                No hidden list. No manual override. No trusted winner selection.
-            </p>
-</div>
-</section>
-<!-- 4. Proof in Motion Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg" id="proof-in-motion">
-<div class="text-center mb-xl">
-<h2 class="font-display text-4xl text-white mb-md font-semibold tracking-tight">Proof in Motion</h2>
-<p class="font-body text-on-surface-variant max-w-xl mx-auto">Pitch and demo from Colosseum Frontier (May 2026). Since then: slashing for absent nodes, private rounds with Halo2-proven winners, and a pinned-setup verifier, all live on devnet.</p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-xl">
-<!-- Video Card 1 — Pitch -->
-<div class="glass border-white/10 rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-primary/40 hover:shadow-[0_0_50px_rgba(184,195,255,0.08)]">
-<div class="aspect-video bg-surface-container-high relative w-full overflow-hidden border-b border-white/5">
-<iframe class="absolute inset-0 h-full w-full border-0" loading="lazy" src="https://www.youtube.com/embed/W0YBuhrkAYQ" title="PRUV Pitch Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-</div>
-<div class="space-y-sm p-md md:p-lg bg-surface-container/30 flex-1">
-<span class="font-mono text-[10px] text-primary uppercase font-bold tracking-widest">PITCH · FRONTIER 2026</span>
-<h3 class="font-display text-2xl text-white font-semibold">PRUV Pitch</h3>
-<p class="font-body text-base text-on-surface leading-relaxed opacity-90">A short overview of the allocation problem and the PRUV protocol thesis.</p>
-<a class="inline-block mt-2 font-mono text-[11px] text-primary font-bold uppercase tracking-widest hover:opacity-80 transition-opacity" href="https://youtu.be/W0YBuhrkAYQ" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
-</div>
-</div>
-<!-- Video Card 2 — Demo -->
-<div class="glass border-white/10 rounded-lg overflow-hidden flex flex-col transition-all duration-300 hover:border-secondary/40 hover:shadow-[0_0_50px_rgba(211,251,255,0.08)]">
-<div class="aspect-video bg-surface-container-high relative w-full overflow-hidden border-b border-white/5">
-<iframe class="absolute inset-0 h-full w-full border-0" loading="lazy" src="https://www.youtube.com/embed/0CnZBOta4-c" title="PRUV Demo Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-</div>
-<div class="space-y-sm p-md md:p-lg bg-surface-container/30 flex-1">
-<span class="font-mono text-[10px] text-secondary uppercase font-bold tracking-widest">DEMO · FRONTIER 2026</span>
-<h3 class="font-display text-2xl text-white font-semibold">PRUV Demo</h3>
-<p class="font-body text-base text-on-surface leading-relaxed opacity-90">Product walkthrough showing how verifiable allocation works in practice.</p>
-<a class="inline-block mt-2 font-mono text-[11px] text-secondary font-bold uppercase tracking-widest hover:opacity-80 transition-opacity" href="https://youtu.be/0CnZBOta4-c" target="_blank" rel="noopener noreferrer">Watch on YouTube</a>
-</div>
-</div>
-</div>
-<!--
-PRUV DEMO NARRATION SCRIPT (VO / recording reference — not shown in UI)
 
-Every airdrop, whitelist, and DAO allocation has the same problem: you trust whoever runs it. You trust the eligible list, the selection logic, and the operator. PRUV removes that trust. It turns allocation into something anyone can verify.
+<main id="top">
 
-Airdrops are decided by teams. Whitelists are controlled by ops. Community selections are often handled behind closed doors. PRUV is the missing layer: verifiable allocation, enforced by cryptography instead of operator promises.
+  <!-- ============================== HERO ============================== -->
+  <section class="relative">
+    <div class="absolute inset-0 grid-bg pointer-events-none" aria-hidden="true"></div>
+    <div class="relative mx-auto max-w-content px-5 pt-20 pb-20 md:pt-28 md:pb-28">
+      <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-14 lg:gap-16 items-center">
+        <div>
+          <p class="label mb-6">Verifiable allocation layer · Solana devnet</p>
+          <h1 class="font-semibold tracking-[-0.025em] text-[clamp(2.4rem,6.5vw,4.5rem)] leading-[0.98] text-balance">
+            The operator cannot choose the outcome.
+          </h1>
+          <p class="mt-6 text-dim text-[17px] leading-relaxed max-w-[46ch]">
+            PRUV commits entries before the seed exists, lets staked nodes attest the draw, and re-derives the winner on-chain. Anyone can recompute it with their own RPC.
+          </p>
+          <div class="mt-9 flex flex-wrap gap-3">
+            <a href="https://pruvpot.vercel.app" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Try PRUVPOT <span class="opacity-70 font-normal">(devnet)</span></a>
+            <a href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer" class="btn btn-ghost">Read the code</a>
+            <a href="https://github.com/pruvnetwork/Solana-Plonk/tree/pruv/code-integrity" target="_blank" rel="noopener noreferrer" class="btn btn-ghost">Verifier source</a>
+          </div>
+          <p class="label mt-8 !tracking-[0.18em] leading-relaxed">Airdrops · Allowlists · Raffles · Grants · Committee selection</p>
+        </div>
 
-Let’s run a live round: 100 wallets, 10 winners, no operator.
+        <!-- Terminal -->
+        <div class="term" id="term" aria-label="Verification terminal output">
+          <div class="term-head flex items-center justify-between">
+            <span class="label" style="font-size:10px;">verify-round.ts</span>
+            <span class="label text-secondary" style="font-size:10px;">devnet</span>
+          </div>
+          <div class="term-body">
+            <pre class="mono"><div class="tline"><span class="t-prompt">$</span> <span class="t-cmd">node verify-round.ts 39 --rpc https://api.devnet.solana.com</span></div><div class="tline"><span class="t-check">✓</span> <span class="t-out">Round account read · status Closed · votes 3</span></div><div class="tline"><span class="t-check">✓</span> <span class="t-out">Draw seed committed on-chain</span></div><div class="tline"><span class="t-check">✓</span> <span class="t-out">Seed recomputed from the 8 slot hashes</span></div><div class="tline"><span class="t-check">✓</span> <span class="t-out">Winner index = u64_le(seed[0..8]) mod ticket_count</span></div><div class="tline"><span class="t-check">✓</span> <span class="t-out">Votes: 3 of 3 registered nodes (≥ 2 needed)</span></div><div class="tline"><span class="t-ok">VERIFIED</span> <span class="t-out">— every check passed from chain data alone</span></div></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-Each participant commits a secret before the allocation seed is known. After the window closes, the list and the outcome cannot be changed by anyone — not even us.
+  <!-- ===================== PROTOCOL (architecture + steps) ===================== -->
+  <section id="protocol" class="bg-surface hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>01</b> / PROTOCOL</p>
 
-Allocation complete. Commitments are valid. Ordering is canonical. The seed is derived deterministically. Winners are recomputable. The proof is generated and verified off-chain. And here is the on-chain receipt: the seed is anchored to Solana devnet.
+      <!-- Architecture diagram -->
+      <p class="label mb-3">Architecture</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em] max-w-[24ch]">From entry to independent recompute.</h2>
 
-Now let’s run the full commit-reveal round with a connected wallet: eight participants, three winners, using a real devnet slot.
+      <div class="mt-10 card p-5 md:p-7">
+        <p class="label mb-5" style="font-size:10px;">Public round</p>
+        <div class="flow-row">
+          <div class="node accent"><div class="n-title">Entries</div><div class="n-sub">commitments locked on-chain</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node"><div class="n-title">Seed</div><div class="n-sub">8 slot hashes · Poseidon</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node"><div class="n-title">Staked nodes</div><div class="n-sub">2/3 votes</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node"><div class="n-title">Solana program</div><div class="n-sub">re-derives winner</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node accent"><div class="n-title">Anyone</div><div class="n-sub">verify-round</div></div>
+        </div>
 
-Each participant submits a commitment. The global seed is derived from all commitments and combined with the Solana slot. The result is deterministic, recomputable, and not controlled by any operator.
+        <div class="my-7 flex items-center gap-3">
+          <span class="flex-1 h-px" style="background:var(--line)"></span>
+          <span class="label text-secondary" style="font-size:10px;">Private round · branches from Entries</span>
+          <span class="flex-1 h-px" style="background:var(--line)"></span>
+        </div>
 
-The seed is now written on-chain. This is the receipt.
+        <div class="flow-row">
+          <div class="node accent"><div class="n-title">Private round</div><div class="n-sub">hidden commitment per entry</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node"><div class="n-title">Halo2 proof</div><div class="n-sub">prove score, hide entry</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node"><div class="n-title">Native Halo2 verifier</div><div class="n-sub">checks on-chain · 3 tx</div></div>
+          <svg class="flow-arrow" width="40" height="24" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><line x1="3" y1="12" x2="33" y2="12"/><path d="M27 6 L35 12 L27 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div class="node accent"><div class="n-title">Highest score wins</div><div class="n-sub">proven, not revealed</div></div>
+        </div>
+      </div>
 
-The transaction is finalized on Solana devnet. The memo carries the allocation seed and slot, making the round independently verifiable. Anyone can open this transaction and recompute the result.
+      <!-- How a round works -->
+      <p class="label mb-3 mt-20">How a round works</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em] max-w-[22ch]">Four steps, each checkable from chain data.</h2>
 
-And here is the cryptographic trace: SHA-256 commitments, secret generation, nullifiers, Merkle inclusion, eligibility checks, and proof verification. This is what verifiable allocation looks like.
+      <div class="mt-12 grid gap-10 md:grid-cols-4 md:gap-x-0">
+        <div class="md:pr-8">
+          <div class="flex items-center gap-4 mb-5"><span class="mono text-primary text-[15px] font-semibold">01</span><span class="flex-1 h-px hidden md:block" style="background:var(--line-strong)"></span></div>
+          <h3 class="font-semibold text-[15px] mb-2">Commit</h3>
+          <p class="text-muted text-sm leading-relaxed">Entries lock on-chain before any randomness exists.</p>
+        </div>
+        <div class="md:px-8 md:border-l md:border-[var(--line)]">
+          <div class="flex items-center gap-4 mb-5"><span class="mono text-primary text-[15px] font-semibold">02</span><span class="flex-1 h-px hidden md:block" style="background:var(--line-strong)"></span></div>
+          <h3 class="font-semibold text-[15px] mb-2">Seed</h3>
+          <p class="text-muted text-sm leading-relaxed">Poseidon hash of the 8 slot hashes after sales close.</p>
+        </div>
+        <div class="md:px-8 md:border-l md:border-[var(--line)]">
+          <div class="flex items-center gap-4 mb-5"><span class="mono text-primary text-[15px] font-semibold">03</span><span class="flex-1 h-px hidden md:block" style="background:var(--line-strong)"></span></div>
+          <h3 class="font-semibold text-[15px] mb-2">Attest</h3>
+          <p class="text-muted text-sm leading-relaxed">Staked nodes vote; the program re-derives the winner and rejects wrong votes; 2/3 threshold.</p>
+        </div>
+        <div class="md:pl-8 md:border-l md:border-[var(--line)]">
+          <div class="flex items-center gap-4 mb-5"><span class="mono text-primary text-[15px] font-semibold">04</span></div>
+          <h3 class="font-semibold text-[15px] mb-2">Verify</h3>
+          <p class="text-muted text-sm leading-relaxed">Anyone recomputes the result from chain data.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 
-PRUV. Verifiable allocation on Solana. No operator picks the outcome. No hidden list. Don’t trust. Verify.
--->
-</section>
-<!-- 5. Team Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg" id="team">
-<div class="text-center mb-xl">
-<h2 class="font-display text-4xl text-white mb-md font-semibold tracking-tight">The Team</h2>
-<p class="font-body text-on-surface-variant max-w-xl mx-auto">Built by the people shaping PRUV.</p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-<!-- Team Member 1 -->
-<div class="py-xxl px-xl glass border-white/5 rounded-lg flex flex-col justify-center min-h-[320px] text-center hover:border-primary/20 transition-colors group">
-<div class="mb-md">
-<span class="font-mono text-[10px] text-primary uppercase font-bold tracking-[0.2em] px-3 py-1 rounded-full bg-primary/5 border border-primary/10">Co-Founder</span>
-</div>
-<h3 class="font-display text-4xl md:text-5xl text-white font-bold group-hover:text-primary transition-colors tracking-tight">Nida Nur Küçükyılmaz</h3>
-<p class="mt-md font-body text-base text-on-surface font-semibold opacity-90">Co-founder · Product / Strategy</p>
-</div>
-<!-- Team Member 2 -->
-<div class="py-xxl px-xl glass border-white/5 rounded-lg flex flex-col justify-center min-h-[320px] text-center hover:border-primary/20 transition-colors group">
-<div class="mb-md">
-<span class="font-mono text-[10px] text-primary uppercase font-bold tracking-[0.2em] px-3 py-1 rounded-full bg-primary/5 border border-primary/10">Co-Founder</span>
-</div>
-<h3 class="font-display text-4xl md:text-5xl text-white font-bold group-hover:text-primary transition-colors tracking-tight">Denizhan Akıncı</h3>
-<p class="mt-md font-body text-base text-on-surface font-semibold opacity-90">Co-founder · Research / Operations</p>
-</div>
-</div>
-</section>
-<!-- 6. Where Allocation Breaks Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg">
-<div class="mb-xl max-w-3xl">
-<h2 class="font-display text-4xl md:text-5xl text-white mb-md font-semibold tracking-tight">Where Allocation Breaks</h2>
-<p class="font-body text-lg text-on-surface-variant leading-relaxed">Allocation can fail at multiple layers: eligibility, ordering, execution, and final verification. PRUV removes discretionary control from each step.</p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
-<div class="p-lg glass border-white/5 rounded-lg">
-<span class="material-symbols-outlined text-primary mb-md opacity-50">security_update_warning</span>
-<h3 class="font-display text-xl text-white mb-sm font-medium">Operator Bias</h3>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed opacity-80">Administrators can silently alter weights or selection parameters after participants have committed funds.</p>
-</div>
-<div class="p-lg glass border-white/5 rounded-lg">
-<span class="material-symbols-outlined text-primary mb-md opacity-50">visibility_off</span>
-<h3 class="font-display text-xl text-white mb-sm font-medium">Opaque Execution</h3>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed opacity-80">Off-chain databases are black boxes. Verifying that rules were applied fairly is currently impossible for users.</p>
-</div>
-<div class="p-lg glass border-white/5 rounded-lg">
-<span class="material-symbols-outlined text-primary mb-md opacity-50">data_thresholding</span>
-<h3 class="font-display text-xl text-white mb-sm font-medium">Partial Verifiability</h3>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed opacity-80">Existing solutions verify the seed, but not the complex logic path that leads to the final distribution result.</p>
-</div>
-</div>
-</section>
-<!-- Manifesto Section -->
-<section class="section-spacing max-w-container-max mx-auto px-lg border-t border-white/5">
-<div class="grid grid-cols-1 md:grid-cols-12 gap-xl items-center">
-<div class="md:col-span-8">
-<h2 class="font-display text-4xl md:text-6xl text-white mb-md font-bold tracking-tight">Manifesto</h2>
-<p class="font-display text-xl md:text-2xl text-on-surface-variant leading-relaxed max-w-3xl">
-                    Allocation should not depend on hidden operators, mutable lists, or unverifiable execution. PRUV treats allocation as a computation path: <span class="text-white">inputs are committed, rules are deterministic, and outcomes are independently verifiable.</span>
-</p>
-</div>
-<div class="md:col-span-4 flex flex-col gap-md">
-<div class="px-md py-3 glass border-white/10 rounded-sm">
-<span class="font-mono text-[11px] text-primary uppercase font-bold tracking-[0.1em]">No hidden eligibility</span>
-</div>
-<div class="px-md py-3 glass border-white/10 rounded-sm">
-<span class="font-mono text-[11px] text-primary uppercase font-bold tracking-[0.1em]">No operator discretion</span>
-</div>
-<div class="px-md py-3 glass border-white/10 rounded-sm">
-<span class="font-mono text-[11px] text-primary uppercase font-bold tracking-[0.1em]">No unverifiable outcomes</span>
-</div>
-</div>
-</div>
-</section>
-<!-- Waitlist Section -->
-<section class="py-xl border-t border-white/5 relative overflow-hidden" id="waitlist">
-<div class="max-w-container-max mx-auto px-lg">
-<div class="glass border-white/10 rounded-lg p-lg md:p-xl flex flex-col gap-xl bg-surface-container/20">
-<div class="max-w-2xl text-left">
-<h2 class="font-display text-2xl md:text-3xl text-white mb-sm font-semibold tracking-tight">Run a node or integrate PRUV</h2>
-<p class="font-body text-base text-on-surface-variant leading-relaxed opacity-80">
-                    For node operators, integrators, and ecosystem partners interested in verifiable allocation infrastructure.
-                </p>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-<div class="border border-white/10 rounded-sm p-lg flex flex-col gap-sm">
-<span class="font-mono text-[10px] text-primary uppercase font-bold tracking-widest">Design partners</span>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed flex-1">Run your first verifiable airdrop, allowlist, raffle or grant round on PRUV with us, on devnet.</p>
-<a class="bg-white/10 hover:bg-white text-white hover:text-background border border-white/20 px-xl py-4 rounded-sm font-bold transition-all inline-block text-center" href="https://forms.gle/v2kRX2FtxrqgPPNW7" target="_blank" rel="noopener noreferrer">Become a design partner</a>
-</div>
-<div class="border border-white/10 rounded-sm p-lg flex flex-col gap-sm">
-<span class="font-mono text-[10px] text-secondary uppercase font-bold tracking-widest">Node operators</span>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed flex-1">Attest draws for a share of each pot. Minimum stake 0.1 SOL; a node that misses its vote is slashed 10%.</p>
-<a class="border border-white/20 text-white px-xl py-4 rounded-sm font-bold transition-all hover:bg-white/5 inline-block text-center" href="https://forms.gle/v2kRX2FtxrqgPPNW7" target="_blank" rel="noopener noreferrer">Apply to run a node</a>
-</div>
-</div>
-<p class="font-body text-xs text-on-surface-variant opacity-70">Prefer DMs? <a class="underline hover:text-white" href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer">Message us on X</a>.</p>
-</div>
-</div>
-<!-- Subtle background accent to match the aesthetic -->
-<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none opacity-[0.03]">
-<div class="w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-primary to-transparent"></div>
-</div>
-</section>
-<!-- 7. Institutional Standard (Comparison Table) -->
-<section class="section-spacing bg-white/[0.02] border-y border-white/5">
-<div class="max-w-container-max mx-auto px-lg">
-<div class="text-center mb-xl">
-<h2 class="font-display text-4xl text-white mb-md font-semibold tracking-tight">Institutional Standard</h2>
-<p class="font-body text-on-surface-variant max-w-xl mx-auto">A comparative analysis of PRUV against legacy and hybrid allocation architectures.</p>
-</div>
-<div class="overflow-x-auto glass border-white/5 rounded-lg">
-<table class="w-full text-left border-collapse min-w-[800px]">
-<thead>
-<tr class="border-b border-white/5">
-<th class="p-lg font-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Infrastructure Metric</th>
-<th class="p-lg font-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">Legacy Systems</th>
-<th class="p-lg font-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] font-bold">VRF Hybrids</th>
-<th class="p-lg font-mono text-[10px] text-primary uppercase tracking-[0.2em] font-bold bg-primary/5">PRUV</th>
-</tr>
-</thead>
-<tbody class="font-body text-sm">
-<tr class="border-b border-white/5">
-<td class="p-lg font-medium text-white">Trust Assumption</td>
-<td class="p-lg text-on-surface-variant">Centralized Operator</td>
-<td class="p-lg text-on-surface-variant">Hybrid Node Trust</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Recompute it yourself</td>
-</tr>
-<tr class="border-b border-white/5">
-<td class="p-lg font-medium text-white">Execution Proofs</td>
-<td class="p-lg text-on-surface-variant">None (Internal)</td>
-<td class="p-lg text-on-surface-variant">Seed Only</td>
-<td class="p-lg text-primary font-bold bg-primary/5">On-chain re-derivation + Halo2 proofs verified on-chain (private-round winners, code integrity)</td>
-</tr>
-<tr class="border-b border-white/5">
-<td class="p-lg font-medium text-white">Consensus Layer</td>
-<td class="p-lg text-on-surface-variant">Database Locked</td>
-<td class="p-lg text-on-surface-variant">Smart Contract</td>
-<td class="p-lg text-primary font-bold bg-primary/5">Solana program + staked nodes (2/3 votes; absent nodes slashed)</td>
-</tr>
-<tr>
-<td class="p-lg font-medium text-white">Verification Cost</td>
-<td class="p-lg text-on-surface-variant">Manual Audit</td>
-<td class="p-lg text-on-surface-variant">High / Gas Intensive</td>
-<td class="p-lg text-primary font-bold bg-primary/5">One command, your own RPC</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</section>
-<!-- 8. Built for High-Stakes Allocation (Use Cases) -->
-<section class="section-spacing max-w-container-max mx-auto px-lg" id="use-cases">
-<h2 class="font-display text-4xl text-white mb-xl font-semibold tracking-tight text-center">Built for High-Stakes Allocation</h2>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
-<div class="p-xl glass border-white/5 rounded-lg flex flex-col justify-between min-h-[300px] hover:border-primary/20 transition-colors">
-<div>
-<span class="material-symbols-outlined text-primary mb-lg text-4xl">database</span>
-<h3 class="font-display text-2xl text-white mb-md font-semibold">Token Distribution</h3>
-<p class="font-body text-on-surface-variant leading-relaxed">Programmatic, fair-launch distribution for foundations and protocols requiring public verification of every allocation.</p>
-</div>
-<a class="inline-flex items-center text-primary text-sm font-bold gap-sm group mt-lg" href="#how-it-works">
-                    View Architecture <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-<div class="p-xl glass border-white/5 rounded-lg flex flex-col justify-between min-h-[300px] hover:border-primary/20 transition-colors">
-<div>
-<span class="material-symbols-outlined text-primary mb-lg text-4xl">account_tree</span>
-<h3 class="font-display text-2xl text-white mb-md font-semibold">Ecosystem Grants</h3>
-<p class="font-body text-on-surface-variant leading-relaxed">Next: grant rounds where the eligible list and the scoring rule are committed on-chain before results, so anyone can recompute who was funded.</p>
-</div>
-<a class="inline-flex items-center text-primary text-sm font-bold gap-sm group mt-lg" href="#proof-in-motion">
-                    Explore Logic <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-<div class="p-xl glass border-white/5 rounded-lg flex flex-col justify-between min-h-[300px] hover:border-primary/20 transition-colors">
-<div>
-<span class="material-symbols-outlined text-primary mb-lg text-4xl">checklist</span>
-<h3 class="font-display text-2xl text-white mb-md font-semibold">Whitelists</h3>
-<p class="font-body text-on-surface-variant leading-relaxed">Deterministic access allocation for allowlists, early access, and gated participation.</p>
-</div>
-<a class="inline-flex items-center text-primary text-sm font-bold gap-sm group mt-lg" href="#proof-in-motion">
-                    Explore Logic <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-<div class="p-xl glass border-white/5 rounded-lg flex flex-col justify-between min-h-[300px] hover:border-primary/20 transition-colors">
-<div>
-<span class="material-symbols-outlined text-primary mb-lg text-4xl">groups</span>
-<h3 class="font-display text-2xl text-white mb-md font-semibold">Governance Selection</h3>
-<p class="font-body text-on-surface-variant leading-relaxed">Verifiable participant or committee selection based on committed rules and transparent logic.</p>
-</div>
-<a class="inline-flex items-center text-primary text-sm font-bold gap-sm group mt-lg" href="#proof-in-motion">
-                    Explore Logic <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-</div>
-</section>
-<!-- 9. Final CTA -->
-<section class="section-spacing border-t border-white/5">
-<div class="max-w-container-max mx-auto px-lg text-center">
-<h2 class="font-display text-5xl md:text-7xl text-white mb-lg font-bold tracking-tight">Securing the future of allocation.</h2>
-<p class="font-body text-lg text-on-surface-variant max-w-xl mx-auto mb-xl">Join PRUV as a network operator or integrate verifiable allocation infrastructure into your protocol.</p>
-<div class="flex flex-wrap justify-center gap-md">
-<a class="bg-white text-background px-xl py-4 rounded-sm font-bold text-lg hover:bg-primary transition-colors inline-block" href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer">View GitHub</a>
-<a class="border border-white/20 text-white px-xl py-4 rounded-sm font-bold text-lg transition-all hover:bg-white/5 inline-block" href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer">Follow on X</a>
-</div>
-</div>
-</section>
-<!-- Footer -->
-<footer class="border-t border-white/5 bg-black py-lg">
-<div class="max-w-container-max mx-auto px-lg py-md text-center">
-<span class="font-mono text-[10px] text-on-surface-variant uppercase tracking-[0.2em] opacity-60 italic">© 2026 PRUV. ALL RIGHTS RESERVED.</span>
-</div>
+  <!-- ===================== GUARANTEES ===================== -->
+  <section id="verify" class="bg-bg hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>02</b> / GUARANTEES</p>
+      <p class="label mb-3">Guarantees</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em] max-w-[24ch]">What the program enforces, not what we promise.</h2>
+
+      <div class="mt-12 grid gap-px rounded-xl overflow-hidden sm:grid-cols-2" style="background: var(--line); border:1px solid var(--line);">
+        <a href="https://pruvpot.vercel.app/rounds/39" target="_blank" rel="noopener noreferrer" class="gcard">
+          <span class="gicon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg></span>
+          <p class="label mb-3">Deterministic draw</p>
+          <p class="text-fg text-[15px] leading-relaxed flex-1">Winner re-derived by the program; wrong votes rejected.</p>
+          <span class="link mono text-xs mt-5 inline-flex items-center gap-1.5">proof <span aria-hidden="true">↗</span></span>
+        </a>
+        <a href="https://explorer.solana.com/tx/3fD69grpabBAUNDTU3jJpskjyoY9Wgqh2YH2v7z9WDVNkhJ6BTTRL8seg6LefsWHJp6XzKA9gexHJL7xUDbsWz3Z?cluster=devnet" target="_blank" rel="noopener noreferrer" class="gcard">
+          <span class="gicon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 L4 14h7l-1 8 9-12h-7z"/></svg></span>
+          <p class="label mb-3">Liveness slashing</p>
+          <p class="text-fg text-[15px] leading-relaxed flex-1">A node that skips its vote can be slashed 10% of stake by anyone.</p>
+          <span class="link mono text-xs mt-5 inline-flex items-center gap-1.5">proof <span aria-hidden="true">↗</span></span>
+        </a>
+        <a href="https://explorer.solana.com/tx/2hEKeggFTu4zqUXxqTLaeUrfWPwdXwPK6UzP7rPVZdFzwKuwXGM21MreYQEP93wYvRge3LkhRAEwCxmM1UC7Ue3k?cluster=devnet" target="_blank" rel="noopener noreferrer" class="gcard">
+          <span class="gicon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+          <p class="label mb-3">Zero-knowledge winners</p>
+          <p class="text-fg text-[15px] leading-relaxed flex-1">Private-round winners proven in Halo2, verified natively on Solana (no Groth16 wrap).</p>
+          <span class="link mono text-xs mt-5 inline-flex items-center gap-1.5">proof <span aria-hidden="true">↗</span></span>
+        </a>
+        <a href="https://explorer.solana.com/tx/HJJmJeotxoSP9w8LHvxiuEUwnMawgLSNb2M1rqxj4LkSQTaUGV7kFkTbwXGfuhL4zaYHoxi3AUF8Ss8iVdrvVDC?cluster=devnet" target="_blank" rel="noopener noreferrer" class="gcard">
+          <span class="gicon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="M8 21h8"/><path d="M12 3a4 4 0 0 1 4 4c0 3-4 6-4 6s-4-3-4-6a4 4 0 0 1 4-4z"/></svg></span>
+          <p class="label mb-3">Pinned setup</p>
+          <p class="text-fg text-[15px] leading-relaxed flex-1">The verifier only accepts the Perpetual Powers of Tau SRS; foreign-setup proofs are refused on-chain (error 0x104).</p>
+          <span class="link mono text-xs mt-5 inline-flex items-center gap-1.5">proof <span aria-hidden="true">↗</span></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FOR DEVELOPERS ===================== -->
+  <section id="developers" class="bg-surface hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>03</b> / DEVELOPERS</p>
+      <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-10 lg:gap-14 items-start">
+        <div>
+          <p class="label mb-3">For developers</p>
+          <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">Mirror the rules off-chain.</h2>
+          <p class="mt-5 text-dim text-[15px] leading-relaxed max-w-[42ch]">
+            The TypeScript SDK in the repo (<span class="mono text-fg">sdk/</span>) implements the same seed derivation and winner rule the program enforces, so you can recompute any round from your own RPC.
+          </p>
+        </div>
+
+        <div class="code min-w-0">
+          <div class="hairline-b flex items-center justify-between px-4 py-2.5">
+            <span class="label" style="font-size:10px;">typescript</span>
+            <button type="button" class="copy" data-copy="code" aria-label="Copy code">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
+          </div>
+<pre id="code" class="mono"><span class="tok-kw">import</span> <span class="tok-dim">{</span> fetchSeedWindow<span class="tok-dim">,</span> computeSeed<span class="tok-dim">,</span> deriveWinnerIndex <span class="tok-dim">}</span> <span class="tok-kw">from</span> <span class="tok-str">"./sdk/src/seed"</span><span class="tok-dim">;</span>
+<span class="tok-kw">const</span> win <span class="tok-dim">=</span> <span class="tok-kw">await</span> fetchSeedWindow<span class="tok-dim">(</span>connection<span class="tok-dim">,</span> endSlot<span class="tok-dim">);</span>
+<span class="tok-kw">const</span> seed <span class="tok-dim">=</span> computeSeed<span class="tok-dim">(</span>win.hashes<span class="tok-dim">,</span> roundId<span class="tok-dim">,</span> ticketCount<span class="tok-dim">);</span>
+<span class="tok-kw">const</span> winner <span class="tok-dim">=</span> deriveWinnerIndex<span class="tok-dim">(</span>seed<span class="tok-dim">,</span> ticketCount<span class="tok-dim">);</span> <span class="tok-com">// same rule the program enforces</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== LIVE ON DEVNET ===================== -->
+  <section id="network" class="bg-bg hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>04</b> / NETWORK</p>
+      <p class="label mb-3">Live on devnet</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">Deployed programs.</h2>
+
+      <div class="mt-10 grid lg:grid-cols-[1.4fr_0.6fr] gap-8 items-start">
+        <div class="card overflow-hidden min-w-0">
+          <div class="exp-row hairline-b" style="padding-top:12px;padding-bottom:12px;">
+            <span class="label exp-name" style="font-size:10px;">Program</span>
+            <span class="label exp-addr hidden sm:block" style="font-size:10px;">Address</span>
+            <span></span><span></span>
+          </div>
+
+          <div class="exp-row">
+            <span class="mono text-fg text-[13px] exp-name">pruv-lottery</span>
+            <span class="addr exp-addr" title="Ckvfj2PVnEseErjbjFYM9LtqwvZaVLCN6m8Vii7qPddF">Ckvfj2PVnEseErjbjFYM9LtqwvZaVLCN6m8Vii7qPddF</span>
+            <button type="button" class="copy exp-copy" data-copy-text="Ckvfj2PVnEseErjbjFYM9LtqwvZaVLCN6m8Vii7qPddF" aria-label="Copy pruv-lottery address"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+            <a class="link mono text-xs exp-exp whitespace-nowrap" href="https://explorer.solana.com/address/Ckvfj2PVnEseErjbjFYM9LtqwvZaVLCN6m8Vii7qPddF?cluster=devnet" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+          </div>
+          <div class="exp-row">
+            <span class="mono text-fg text-[13px] exp-name">pruv-private-round</span>
+            <span class="addr exp-addr" title="FSXuj38RQSpoffg3QjyCwj9KFAgdxjMK1X7sLEUcPqJP">FSXuj38RQSpoffg3QjyCwj9KFAgdxjMK1X7sLEUcPqJP</span>
+            <button type="button" class="copy exp-copy" data-copy-text="FSXuj38RQSpoffg3QjyCwj9KFAgdxjMK1X7sLEUcPqJP" aria-label="Copy pruv-private-round address"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+            <a class="link mono text-xs exp-exp whitespace-nowrap" href="https://explorer.solana.com/address/FSXuj38RQSpoffg3QjyCwj9KFAgdxjMK1X7sLEUcPqJP?cluster=devnet" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+          </div>
+          <div class="exp-row">
+            <span class="mono text-fg text-[13px] exp-name">halo2-verifier</span>
+            <span class="addr exp-addr" title="7qn5qmXUC9uSCZrGDnLYTdvMkfdezCtf7DpUtBrt25L9">7qn5qmXUC9uSCZrGDnLYTdvMkfdezCtf7DpUtBrt25L9</span>
+            <button type="button" class="copy exp-copy" data-copy-text="7qn5qmXUC9uSCZrGDnLYTdvMkfdezCtf7DpUtBrt25L9" aria-label="Copy halo2-verifier address"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+            <a class="link mono text-xs exp-exp whitespace-nowrap" href="https://explorer.solana.com/address/7qn5qmXUC9uSCZrGDnLYTdvMkfdezCtf7DpUtBrt25L9?cluster=devnet" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+          </div>
+          <div class="exp-row">
+            <span class="mono text-fg text-[13px] exp-name">pruv-registry</span>
+            <span class="addr exp-addr" title="Ac7s37WGGK2DToo4wu3zZRVA6nARg8Dm9zQXXfZajG5p">Ac7s37WGGK2DToo4wu3zZRVA6nARg8Dm9zQXXfZajG5p</span>
+            <button type="button" class="copy exp-copy" data-copy-text="Ac7s37WGGK2DToo4wu3zZRVA6nARg8Dm9zQXXfZajG5p" aria-label="Copy pruv-registry address"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+            <a class="link mono text-xs exp-exp whitespace-nowrap" href="https://explorer.solana.com/address/Ac7s37WGGK2DToo4wu3zZRVA6nARg8Dm9zQXXfZajG5p?cluster=devnet" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+          </div>
+          <div class="exp-row">
+            <span class="mono text-fg text-[13px] exp-name">pruv-attestation</span>
+            <span class="addr exp-addr" title="8P1vjkTueMRwrTsYPbGh2cdppz39CwQHcosRuXopL8VQ">8P1vjkTueMRwrTsYPbGh2cdppz39CwQHcosRuXopL8VQ</span>
+            <button type="button" class="copy exp-copy" data-copy-text="8P1vjkTueMRwrTsYPbGh2cdppz39CwQHcosRuXopL8VQ" aria-label="Copy pruv-attestation address"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+            <a class="link mono text-xs exp-exp whitespace-nowrap" href="https://explorer.solana.com/address/8P1vjkTueMRwrTsYPbGh2cdppz39CwQHcosRuXopL8VQ?cluster=devnet" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <a href="https://pruvpot.vercel.app/rounds/39" target="_blank" rel="noopener noreferrer" class="ev">
+            <p class="mono text-[13px] text-fg leading-relaxed">Round 39 · drawn unattended · <span class="text-ok">3/3 votes</span> <span class="text-muted" aria-hidden="true">↗</span></p>
+            <p class="label mt-2" style="font-size:9.5px;">Devnet · 2026-10-12</p>
+          </a>
+          <a href="https://explorer.solana.com/tx/3fD69grpabBAUNDTU3jJpskjyoY9Wgqh2YH2v7z9WDVNkhJ6BTTRL8seg6LefsWHJp6XzKA9gexHJL7xUDbsWz3Z?cluster=devnet" target="_blank" rel="noopener noreferrer" class="ev">
+            <p class="mono text-[13px] text-fg leading-relaxed">Round 38 · absent node slashed <span class="text-muted" aria-hidden="true">↗</span></p>
+            <p class="label mt-2" style="font-size:9.5px;">Devnet · 2026-10-12</p>
+          </a>
+          <a href="https://explorer.solana.com/tx/2hEKeggFTu4zqUXxqTLaeUrfWPwdXwPK6UzP7rPVZdFzwKuwXGM21MreYQEP93wYvRge3LkhRAEwCxmM1UC7Ue3k?cluster=devnet" target="_blank" rel="noopener noreferrer" class="ev">
+            <p class="mono text-[13px] text-fg leading-relaxed">Private round 2 · Halo2-proven winner paid <span class="text-muted" aria-hidden="true">↗</span></p>
+            <p class="label mt-2" style="font-size:9.5px;">Devnet · 2026-10-12</p>
+          </a>
+          <p class="text-muted text-xs leading-relaxed mt-1">Devnet. Nodes are operated by the PRUV team today; registration is permissionless.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BUILT ON PRUV ===================== -->
+  <section class="bg-surface hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>05</b> / ECOSYSTEM</p>
+      <p class="label mb-3">Built on PRUV</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">What runs on the layer.</h2>
+
+      <div class="mt-10 grid sm:grid-cols-2 gap-5">
+        <div class="card p-7 flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="mono font-bold tracking-[0.1em] text-[15px]">PRUVPOT</h3>
+            <span class="label text-ok" style="font-size:10px;">● live · devnet</span>
+          </div>
+          <p class="text-dim text-[15px] leading-relaxed flex-1">Verifiable pot, live on devnet.</p>
+          <a href="https://pruvpot.vercel.app" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm mt-6 self-start">Open PRUVPOT ↗</a>
+        </div>
+        <div class="card p-7 flex flex-col">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="mono font-bold tracking-[0.1em] text-[15px] text-dim">PruvDrop</h3>
+            <span class="label" style="font-size:10px;">devnet demo</span>
+          </div>
+          <p class="text-muted text-[15px] leading-relaxed flex-1">Verifiable airdrop.</p>
+          <a href="https://github.com/pruvnetwork/pruvdrop" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm mt-6 self-start">View repo ↗</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ECONOMICS ===================== -->
+  <section id="economics" class="bg-bg hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>06</b> / ECONOMICS</p>
+      <p class="label mb-3">How PRUV makes money</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em] max-w-[26ch]">Fees are set in on-chain config, not in a pitch deck.</h2>
+      <div class="mt-10 grid gap-5 md:grid-cols-3">
+        <div class="card p-6">
+          <p class="label mb-3">Protocol fee</p>
+          <p class="text-fg text-[15px] leading-relaxed"><span class="mono text-primary">5%</span> of every pot goes to the protocol treasury, a Squads 2-of-3 multisig.</p>
+        </div>
+        <div class="card p-6">
+          <p class="label mb-3">Node rewards</p>
+          <p class="text-fg text-[15px] leading-relaxed"><span class="mono text-primary">10%</span> goes to the staked nodes that attest the draw. A node that misses its vote is slashed.</p>
+        </div>
+        <div class="card p-6">
+          <p class="label mb-3 text-secondary">Next</p>
+          <p class="text-fg text-[15px] leading-relaxed">Per-allocation fees for teams that run airdrops and allowlists on PRUV, starting with PruvDrop.</p>
+        </div>
+      </div>
+      <p class="text-muted text-xs leading-relaxed mt-5">Current devnet config: winner 85%, nodes 10%, treasury 5%. Private rounds: winner 95%, treasury 5%.</p>
+    </div>
+  </section>
+
+  <!-- ===================== SHIPPED ===================== -->
+  <section id="shipped" class="bg-surface hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>07</b> / SHIPPED</p>
+      <p class="label mb-3">Shipped this hackathon</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">Live on devnet since 2026-10-12.</h2>
+      <ul class="mt-10 card overflow-hidden">
+        <li class="exp-row"><span class="mono text-primary text-[12px] exp-name">SLASHING</span><span class="text-dim text-[14px] min-w-0 exp-addr">Nodes that skip a vote can be slashed 10% of stake by anyone.</span><span class="exp-copy"></span><a class="link mono text-xs whitespace-nowrap exp-exp" href="https://explorer.solana.com/tx/3fD69grpabBAUNDTU3jJpskjyoY9Wgqh2YH2v7z9WDVNkhJ6BTTRL8seg6LefsWHJp6XzKA9gexHJL7xUDbsWz3Z?cluster=devnet" target="_blank" rel="noopener noreferrer">tx ↗</a></li>
+        <li class="exp-row"><span class="mono text-primary text-[12px] exp-name">PRIVATE ROUNDS</span><span class="text-dim text-[14px] min-w-0 exp-addr">Winner proven in Halo2 and verified on-chain; the prize goes to an address bound into the proof.</span><span class="exp-copy"></span><a class="link mono text-xs whitespace-nowrap exp-exp" href="https://explorer.solana.com/tx/2hEKeggFTu4zqUXxqTLaeUrfWPwdXwPK6UzP7rPVZdFzwKuwXGM21MreYQEP93wYvRge3LkhRAEwCxmM1UC7Ue3k?cluster=devnet" target="_blank" rel="noopener noreferrer">tx ↗</a></li>
+        <li class="exp-row"><span class="mono text-primary text-[12px] exp-name">PINNED SETUP</span><span class="text-dim text-[14px] min-w-0 exp-addr">Soundness fix: the verifier refuses proofs made under any setup other than Perpetual Powers of Tau.</span><span class="exp-copy"></span><a class="link mono text-xs whitespace-nowrap exp-exp" href="https://explorer.solana.com/tx/HJJmJeotxoSP9w8LHvxiuEUwnMawgLSNb2M1rqxj4LkSQTaUGV7kFkTbwXGfuhL4zaYHoxi3AUF8Ss8iVdrvVDC?cluster=devnet" target="_blank" rel="noopener noreferrer">tx ↗</a></li>
+        <li class="exp-row"><span class="mono text-primary text-[12px] exp-name">NODES</span><span class="text-dim text-[14px] min-w-0 exp-addr">Three nodes on a dedicated server, drawing rounds unattended.</span><span class="exp-copy"></span><a class="link mono text-xs whitespace-nowrap exp-exp" href="https://pruvpot.vercel.app/rounds/39" target="_blank" rel="noopener noreferrer">round ↗</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== TEAM ===================== -->
+  <section class="bg-bg hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>08</b> / TEAM</p>
+      <p class="label mb-3">Team</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">Who builds PRUV.</h2>
+
+      <div class="mt-10 grid sm:grid-cols-2 gap-5">
+        <div class="card p-6 flex items-center gap-4">
+          <span class="monogram" aria-hidden="true">NK</span>
+          <div class="min-w-0">
+            <p class="font-semibold text-[15px] text-fg">Nida Nur Küçükyılmaz</p>
+            <p class="label mt-1.5" style="font-size:10px;">Co-founder · Product / Strategy</p>
+          </div>
+        </div>
+        <div class="card p-6 flex items-center gap-4">
+          <span class="monogram" aria-hidden="true">DA</span>
+          <div class="min-w-0">
+            <p class="font-semibold text-[15px] text-fg">Denizhan Akıncı</p>
+            <p class="label mt-1.5" style="font-size:10px;">Co-founder · Research / Operations</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RUN A NODE / INTEGRATE ===================== -->
+  <section id="contact" class="bg-surface hairline-t">
+    <div class="mx-auto max-w-content px-5 py-20 md:py-24">
+      <p class="sindex hidden md:block"><b>09</b> / CONNECT</p>
+      <p class="label mb-3">Work with us</p>
+      <h2 class="text-2xl md:text-3xl font-semibold tracking-[-0.015em]">Build on the layer, or attest it.</h2>
+      <div class="mt-10 grid gap-5 md:grid-cols-2">
+        <div class="card p-7 flex flex-col">
+          <p class="label mb-3 text-primary">Design partners</p>
+          <p class="text-dim text-[15px] leading-relaxed flex-1">Run your first verifiable airdrop, allowlist, raffle or grant round on PRUV with us, on devnet.</p>
+          <a href="https://forms.gle/v2kRX2FtxrqgPPNW7" target="_blank" rel="noopener noreferrer" class="btn btn-primary mt-6 self-start">Become a design partner</a>
+        </div>
+        <div class="card p-7 flex flex-col">
+          <p class="label mb-3 text-secondary">Node operators</p>
+          <p class="text-dim text-[15px] leading-relaxed flex-1">Attest draws for 10% of each pot. Minimum stake 0.1 SOL; a node that misses its vote is slashed 10%.</p>
+          <a href="https://forms.gle/v2kRX2FtxrqgPPNW7" target="_blank" rel="noopener noreferrer" class="btn btn-ghost mt-6 self-start">Apply to run a node</a>
+        </div>
+      </div>
+      <p class="text-muted text-xs mt-6">Prefer DMs? <a class="link" href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer">Message us on X</a>.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================== FOOTER ============================== -->
+<footer class="bg-bg hairline-t">
+  <div class="mx-auto max-w-content px-5 py-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+    <div class="flex items-center gap-2.5">
+      <img class="brand-mark" src="pruv-butterfly.png" alt="PRUV" width="22" height="22">
+      <span class="mono font-bold tracking-[0.18em] text-[14px]">PRUV</span>
+    </div>
+    <p class="label" style="font-size:10px;">Built for Colosseum Crypto World's Fair</p>
+    <div class="flex items-center gap-6 text-sm text-dim">
+      <a href="https://github.com/pruvnetwork/pruvpot" target="_blank" rel="noopener noreferrer" class="hover:text-fg transition-colors">GitHub</a>
+      <a href="https://x.com/pruvfun" target="_blank" rel="noopener noreferrer" class="hover:text-fg transition-colors">X</a>
+      <a href="https://pruvpot.vercel.app" target="_blank" rel="noopener noreferrer" class="hover:text-fg transition-colors">PRUVPOT</a>
+    </div>
+  </div>
+  <div class="mx-auto max-w-content px-5 pb-10"><p class="text-muted text-xs">© 2026 PRUV</p></div>
 </footer>
-</body></html>
+
+<script>
+  (function () {
+    /* --- Logo fallback: if pruv-butterfly.png is not present (e.g. preview), draw the mark --- */
+    var SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" class="text-primary" aria-hidden="true"><path d="M12 6 C 6.5 2.5, 2.5 6, 3.3 10.6 C 3.9 14, 8.6 13.6, 12 11.4"/><path d="M12 6 C 17.5 2.5, 21.5 6, 20.7 10.6 C 20.1 14, 15.4 13.6, 12 11.4"/><path d="M12 11.4 C 9.2 13.4, 4.6 15.4, 5.4 18.4 C 6 20.6, 9.8 20, 12 16.8"/><path d="M12 11.4 C 14.8 13.4, 19.4 15.4, 18.6 18.4 C 18 20.6, 14.2 20, 12 16.8"/><line x1="12" y1="6" x2="12" y2="16.8"/></svg>';
+    document.querySelectorAll('img.brand-mark').forEach(function (img) {
+      img.addEventListener('error', function () {
+        var span = document.createElement('span');
+        span.className = 'text-primary';
+        span.style.display = 'inline-flex';
+        span.innerHTML = SVG;
+        if (img.parentNode) img.parentNode.replaceChild(span, img);
+      });
+    });
+
+    /* --- Mobile menu --- */
+    var btn = document.getElementById('menuBtn');
+    var menu = document.getElementById('mobileMenu');
+    if (btn && menu) {
+      btn.addEventListener('click', function () {
+        var open = menu.hidden;
+        menu.hidden = !open;
+        btn.setAttribute('aria-expanded', String(open));
+      });
+      menu.querySelectorAll('[data-mclose]').forEach(function (a) {
+        a.addEventListener('click', function () { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); });
+      });
+    }
+
+    /* --- Terminal line reveal (~1.2s), reduced-motion shows all --- */
+    var term = document.getElementById('term');
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (term && !reduce) {
+      var lines = term.querySelectorAll('.tline');
+      term.classList.add('anim');
+      lines.forEach(function (line, i) {
+        setTimeout(function () { line.classList.add('show'); }, 140 + i * 165);
+      });
+    }
+
+    /* --- Copy buttons --- */
+    function flash(b) { b.classList.add('copied'); setTimeout(function () { b.classList.remove('copied'); }, 1200); }
+    function copyText(text, b) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { flash(b); }).catch(function () { fallback(text, b); });
+      } else { fallback(text, b); }
+    }
+    function fallback(text, b) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); flash(b);
+      } catch (e) {}
+    }
+    document.querySelectorAll('[data-copy-text]').forEach(function (b) {
+      b.addEventListener('click', function () { copyText(b.getAttribute('data-copy-text'), b); });
+    });
+    document.querySelectorAll('[data-copy]').forEach(function (b) {
+      b.addEventListener('click', function () { var el = document.getElementById(b.getAttribute('data-copy')); if (el) copyText(el.innerText, b); });
+    });
+  })();
+</script>
+
+</body>
+</html>
